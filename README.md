@@ -45,11 +45,131 @@ Developer → Gerrit → Reviewers → Merge
 11. [Next Steps](#11-next-steps)
 12. [Resources](#12-resources)
 
+### 📚 Additional Learning Materials
+
+- [📊 Visual Diagrams & Flowcharts](./visuals.md) - Understand Gerrit with visual aids
+- [🛠️ Practical Examples & Scenarios](./examples.md) - Real-world step-by-step solutions
+- [🎯 Hands-On Practice Lab](./practice-lab.md) - Progressive exercises from beginner to expert
+- [⚡ Complete Command Reference](./commands.md) - All Gerrit commands with examples
+
 ---
 
-## 🛠️ Installation & Environment Setup
+## 1. Installation & Environment Setup
 
 ### Option 1: Using Existing Gerrit Server (Recommended for Beginners)
+
+If your organization already has Gerrit set up, you just need to configure your local environment:
+
+#### Step 1: Install Prerequisites
+```bash
+# Install Git (if not already installed)
+# Windows: Download from https://git-scm.com/download/win
+# macOS: brew install git
+# Linux: sudo apt-get install git
+
+# Verify Git installation
+git --version
+```
+
+#### Step 2: Configure Git
+```bash
+# Set your identity
+git config --global user.name "Your Full Name"
+git config --global user.email "your.email@company.com"
+
+# Set up SSH key (recommended)
+ssh-keygen -t rsa -b 4096 -C "your.email@company.com"
+# Add the public key to your Gerrit account
+```
+
+#### Step 3: Clone and Setup Repository
+```bash
+# Clone your project repository
+git clone ssh://username@gerrit.example.com:29418/your-project
+cd your-project
+
+# Install commit-msg hook (CRITICAL!)
+curl -Lo .git/hooks/commit-msg https://gerrit.example.com/tools/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
+
+# Test the setup
+git log --oneline -5
+```
+
+### Option 2: Local Gerrit Setup (For Learning/Testing)
+
+#### Using Docker (Easiest)
+
+**Step 1: Install Docker**
+```bash
+# Windows: Download Docker Desktop
+# macOS: brew install docker
+# Linux: sudo apt-get install docker.io docker-compose
+```
+
+**Step 2: Create Gerrit Container**
+```bash
+# Create a directory for Gerrit
+mkdir gerrit-docker
+cd gerrit-docker
+
+# Create docker-compose.yml
+cat > docker-compose.yml << 'EOF'
+version: '3'
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:latest
+    ports:
+      - "8080:8080"
+      - "29418:29418"
+    volumes:
+      - gerrit_data:/var/gerrit
+    environment:
+      - CANONICAL_WEB_URL=http://localhost:8080
+    command: |
+      sh -c '
+        git config -f /var/gerrit/etc/gerrit.config gerrit.canonicalWebUrl "http://localhost:8080"
+        git config -f /var/gerrit/etc/gerrit.config auth.type "DEVELOPMENT_BECOME_ANY_ACCOUNT"
+        /var/gerrit/bin/gerrit.sh run
+      '
+
+volumes:
+  gerrit_data:
+EOF
+
+# Start Gerrit
+docker-compose up -d
+
+# Wait for startup (check logs)
+docker-compose logs -f gerrit
+```
+
+**Step 3: Access Gerrit**
+- Open browser: http://localhost:8080
+- Click "Sign In" → "Become" → Enter your name
+- You're now the admin!
+
+### Verification Steps
+
+#### Test 1: Basic Gerrit Workflow
+```bash
+# Make a change
+echo "Hello Gerrit!" > hello.txt
+git add hello.txt
+git commit -m "Add hello file
+
+This is a test change for Gerrit setup verification.
+"
+
+# Submit to Gerrit
+git push origin HEAD:refs/for/main
+
+# Check Gerrit UI - should see your change
+```
+
+---
+
+## 2. Change-Based Workflow
 
 ### The Big Picture
 Unlike GitHub's branch-based workflow, Gerrit works with **individual changes** (commits).
@@ -91,7 +211,7 @@ git push origin HEAD:refs/for/main
 
 ---
 
-## 2. The Review Process
+## 3. The Review Process
 
 ### The Review Lifecycle
 
@@ -127,7 +247,7 @@ NullPointerException if user is null on line 23."
 
 ---
 
-## 3. Essential Commands
+## 4. Essential Commands
 
 ### The 5 Commands You'll Use 90% of the Time
 
@@ -165,7 +285,7 @@ git push origin HEAD:refs/for/main
 
 ---
 
-## 4. Change States
+## 5. Change States
 
 ### Understanding Change States
 
@@ -195,7 +315,7 @@ DRAFT   ↓        ↑
 
 ---
 
-## 5. Merge Strategies
+## 6. Merge Strategies
 
 ### The Three Ways Changes Get Merged
 
@@ -228,7 +348,7 @@ After:  A---B---C---X---D' (main, your change rebased)
 
 ---
 
-## Common Scenarios
+## 7. Common Scenarios
 
 ### Scenario 1: "My Change Won't Merge"
 
@@ -286,7 +406,7 @@ git checkout main
 
 ---
 
-## Troubleshooting
+## 8. Troubleshooting
 
 ### Problem: "Missing Change-Id"
 
@@ -314,7 +434,7 @@ git commit --amend
 
 ---
 
-## Practice Exercises
+## 9. Practice Exercises
 
 ### Exercise 1: Submit Your First Change
 
@@ -342,7 +462,7 @@ git commit --amend
 
 ---
 
-## Quick Reference Card
+## 10. Quick Reference Card
 
 ### Essential Commands Cheat Sheet
 
@@ -374,7 +494,7 @@ git log --oneline -5
 
 ---
 
-## Next Steps
+## 11. Next Steps
 
 Once you've mastered these concepts, explore:
 
@@ -387,7 +507,7 @@ Once you've mastered these concepts, explore:
 
 ---
 
-## Resources
+## 12. Resources
 
 - [Official Gerrit Documentation](https://gerrit-review.googlesource.com/Documentation/)
 - [Gerrit User Guide](https://gerrit-review.googlesource.com/Documentation/intro-user.html)
