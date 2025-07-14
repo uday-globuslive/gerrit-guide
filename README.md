@@ -152,6 +152,296 @@ docker-compose logs -f gerrit
 - Click "Sign In" → "Become" → Enter your name
 - You're now the admin!
 
+#### Step 4 (Optional): Integrate with GitLab for Testing
+
+You can extend your local Gerrit setup to integrate with GitLab instances for realistic testing scenarios.
+
+##### Option 2A: Integration with Local GitLab Instance
+
+If you have GitLab running on your local network (e.g., http://gitlab.local:8090):
+
+**Step 1: Set up GitLab OAuth Application**
+```bash
+# In your local GitLab instance:
+# 1. Go to Admin Area → Applications (or User Settings → Applications)
+# 2. Create new application:
+#    - Name: "Local Gerrit Testing"
+#    - Redirect URI: http://localhost:8080/oauth
+#    - Scopes: read_user, read_api, read_repository
+# 3. Note the Application ID and Secret
+```
+
+**Step 2: Configure Gerrit for GitLab OAuth**
+```bash
+# Stop Gerrit container
+docker-compose down
+
+# Create OAuth plugin directory
+mkdir -p gerrit_data/plugins
+cd gerrit_data/plugins
+
+# Download GitLab OAuth plugin
+wget https://github.com/davido/gerrit-oauth-provider/releases/download/v3.8.0/gerrit-oauth-provider.jar
+
+# Update docker-compose.yml to include OAuth configuration
+cd ..
+cat > docker-compose.yml << 'EOF'
+version: '3'
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:latest
+    ports:
+      - "8080:8080"
+      - "29418:29418"
+    volumes:
+      - gerrit_data:/var/gerrit
+      - ./plugins:/var/gerrit/plugins
+    environment:
+      - CANONICAL_WEB_URL=http://localhost:8080
+    command: |
+      sh -c '
+        git config -f /var/gerrit/etc/gerrit.config gerrit.canonicalWebUrl "http://localhost:8080"
+        git config -f /var/gerrit/etc/gerrit.config auth.type "OAUTH"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-id "YOUR_GITLAB_APP_ID"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-secret "YOUR_GITLAB_APP_SECRET"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.domain "gitlab.local:8090"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.use-preferred-username "true"
+        /var/gerrit/bin/gerrit.sh run
+      '
+
+volumes:
+  gerrit_data:
+EOF
+
+# Replace YOUR_GITLAB_APP_ID and YOUR_GITLAB_APP_SECRET with actual values
+# Start Gerrit with OAuth
+docker-compose up -d
+```
+
+**Step 3: Test Local GitLab Integration**
+```bash
+# Create test repository in local GitLab
+# Clone and set up for Gerrit review
+git clone http://gitlab.local:8090/your-username/test-project.git
+cd test-project
+
+# Add Gerrit remote
+git remote add gerrit ssh://your-username@localhost:29418/test-project
+
+# Install commit-msg hook
+curl -Lo .git/hooks/commit-msg http://localhost:8080/tools/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
+
+# Test OAuth login: Go to http://localhost:8080 → Should redirect to GitLab for auth
+```
+
+##### Option 2B: Integration with GitLab.com
+
+For testing with the public GitLab.com:
+
+**Step 1: Create GitLab.com OAuth Application**
+```bash
+# 1. Go to https://gitlab.com/-/profile/applications
+# 2. Create new application:
+#    - Name: "Local Gerrit Testing"
+#    - Redirect URI: http://localhost:8080/oauth
+#    - Scopes: read_user, read_api, read_repository
+# 3. Note the Application ID and Secret
+```
+
+**Step 2: Configure Gerrit for GitLab.com OAuth**
+```bash
+# Stop current Gerrit
+docker-compose down
+
+# Update docker-compose.yml for GitLab.com
+cat > docker-compose.yml << 'EOF'
+version: '3'
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:latest
+    ports:
+      - "8080:8080"
+      - "29418:29418"
+    volumes:
+      - gerrit_data:/var/gerrit
+      - ./plugins:/var/gerrit/plugins
+    environment:
+      - CANONICAL_WEB_URL=http://localhost:8080
+    command: |
+      sh -c '
+        git config -f /var/gerrit/etc/gerrit.config gerrit.canonicalWebUrl "http://localhost:8080"
+        git config -f /var/gerrit/etc/gerrit.config auth.type "OAUTH"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-id "YOUR_GITLAB_COM_APP_ID"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-secret "YOUR_GITLAB_COM_APP_SECRET"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.domain "gitlab.com"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.use-preferred-username "true"
+        /var/gerrit/bin/gerrit.sh run
+      '
+
+volumes:
+  gerrit_data:
+EOF
+
+# Start Gerrit
+docker-compose up -d
+```
+
+**Step 3: Test GitLab.com Integration**
+```bash
+# Clone your GitLab.com repository
+git clone https://gitlab.com/your-username/your-project.git
+cd your-project
+
+# Add Gerrit remote for testing
+git remote add gerrit ssh://your-gitlab-username@localhost:29418/your-username/your-project
+
+# Install commit-msg hook
+curl -Lo .git/hooks/commit-msg http://localhost:8080/tools/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
+
+# Test workflow
+echo "Local testing with GitLab.com" > test-file.txt
+git add test-file.txt
+git commit -m "Test local Gerrit with GitLab.com
+
+Testing the integration between local Gerrit and GitLab.com.
+"
+
+# Submit for review
+git push gerrit HEAD:refs/for/main
+
+# Login to Gerrit: http://localhost:8080 → Should authenticate via GitLab.com
+```
+
+##### Option 2C: Network GitLab Instance Integration
+
+For GitLab running on your company network (e.g., http://gitlab.company.local):
+
+**Step 1: Configure Network Access**
+```bash
+# If using Docker Desktop on Windows/Mac, ensure network connectivity
+# Add to docker-compose.yml if needed:
+version: '3'
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:latest
+    ports:
+      - "8080:8080"
+      - "29418:29418"
+    extra_hosts:
+      - "gitlab.company.local:192.168.1.100"  # Replace with actual IP
+    # ... rest of configuration
+```
+
+**Step 2: Configure for Network GitLab**
+```bash
+# Update OAuth configuration for network GitLab
+cat > docker-compose.yml << 'EOF'
+version: '3'
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:latest
+    ports:
+      - "8080:8080"
+      - "29418:29418"
+    volumes:
+      - gerrit_data:/var/gerrit
+      - ./plugins:/var/gerrit/plugins
+    extra_hosts:
+      - "gitlab.company.local:192.168.1.100"  # Adjust IP as needed
+    environment:
+      - CANONICAL_WEB_URL=http://localhost:8080
+    command: |
+      sh -c '
+        git config -f /var/gerrit/etc/gerrit.config gerrit.canonicalWebUrl "http://localhost:8080"
+        git config -f /var/gerrit/etc/gerrit.config auth.type "OAUTH"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-id "YOUR_NETWORK_GITLAB_APP_ID"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-secret "YOUR_NETWORK_GITLAB_APP_SECRET"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.domain "gitlab.company.local"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.use-preferred-username "true"
+        /var/gerrit/bin/gerrit.sh run
+      '
+
+volumes:
+  gerrit_data:
+EOF
+```
+
+**Step 3: Test Network GitLab Integration**
+```bash
+# Test connectivity
+curl http://gitlab.company.local
+
+# Clone repository from network GitLab
+git clone http://gitlab.company.local/your-group/your-project.git
+cd your-project
+
+# Add Gerrit remote
+git remote add gerrit ssh://your-username@localhost:29418/your-group/your-project
+
+# Install hooks and test
+curl -Lo .git/hooks/commit-msg http://localhost:8080/tools/hooks/commit-msg
+chmod +x .git/hooks/commit-msg
+
+# Make test change
+echo "Network GitLab integration test" > network-test.txt
+git add network-test.txt
+git commit -m "Test network GitLab integration"
+git push gerrit HEAD:refs/for/main
+```
+
+#### Advanced Testing Configurations
+
+##### Multiple GitLab Instances
+```bash
+# You can configure multiple OAuth providers for testing different GitLab instances
+# Create separate configurations in gerrit.config:
+
+git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth-local.client-id "LOCAL_APP_ID"
+git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth-local.domain "gitlab.local"
+
+git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth-com.client-id "GITLAB_COM_APP_ID"
+git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth-com.domain "gitlab.com"
+```
+
+##### Testing Replication
+```bash
+# Set up replication for testing (optional)
+# Create replication.config inside container:
+docker exec -it gerrit-docker_gerrit_1 sh -c '
+cat > /var/gerrit/etc/replication.config << EOF
+[remote "test-gitlab"]
+    url = git@gitlab.com:\${name}.git
+    push = +refs/heads/*:refs/heads/*
+    authGroup = Administrators
+EOF
+'
+
+# Restart Gerrit to load replication config
+docker-compose restart
+```
+
+##### Troubleshooting Local Integrations
+```bash
+# Check Gerrit logs
+docker-compose logs -f gerrit
+
+# Check OAuth configuration
+docker exec gerrit-docker_gerrit_1 cat /var/gerrit/etc/gerrit.config
+
+# Test OAuth endpoint
+curl "http://localhost:8080/login"
+
+# Verify plugin installation
+docker exec gerrit-docker_gerrit_1 ls -la /var/gerrit/plugins/
+
+# Reset configuration if needed
+docker-compose down
+docker volume rm gerrit-docker_gerrit_data
+# Then restart with fresh configuration
+```
+
 ### Option 3: Gerrit Server with GitLab Integration (Production Setup)
 
 If you want to set up your own Gerrit server that integrates with your existing GitLab instance, this option provides a complete production-ready setup.
