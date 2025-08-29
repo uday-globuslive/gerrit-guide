@@ -4,6 +4,19 @@
 
 This chapter provides hands-on exercises designed to reinforce the concepts learned throughout this guide. Each exercise builds upon previous knowledge and includes step-by-step instructions, expected outcomes, and troubleshooting tips.
 
+## 📚 **Sample Workflow Guide**
+
+**Start here:** Review the [Complete Sample Workflow with Jenkins](sample-workflow.md) to see how Gerrit works in practice. This comprehensive example shows:
+
+- Real-world team collaboration scenario
+- Step-by-step review process from code creation to submission
+- Jenkins CI/CD integration with automated testing
+- Human review process with constructive feedback
+- Rating system and approval workflows
+- Enterprise-level quality gates and metrics
+
+This sample demonstrates all the concepts from this guide working together in a practical business environment.
+
 ## Exercise Categories
 
 ### 🎯 Beginner Exercises (Chapters 1-4)

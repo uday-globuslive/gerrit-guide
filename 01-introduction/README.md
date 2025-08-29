@@ -95,6 +95,17 @@ Think of Gerrit like a **document editing process** in a professional environmen
 - **Eclipse Foundation**: Uses Gerrit for all Eclipse projects
 - **Many enterprise companies**: For internal software development
 
+## Sample Workflow Preview
+
+Want to see how Gerrit works in practice? Check out our comprehensive [Sample Workflow with Jenkins Integration](../11-exercises/sample-workflow.md) that demonstrates:
+
+- **Real team collaboration** with developers, reviewers, and DevOps
+- **Complete CI/CD pipeline** with automated testing and verification
+- **Human review process** with constructive feedback and iterations
+- **Enterprise-grade quality gates** and approval workflows
+
+This sample shows how all the concepts from this guide work together in a real business environment.
+
 ## What You'll Learn in This Guide
 
 By the end of this tutorial, you'll be able to:
@@ -103,9 +114,11 @@ By the end of this tutorial, you'll be able to:
 2. **Set up user accounts** and permissions
 3. **Create and review** code changes
 4. **Integrate Gerrit** with GitLab and GitHub
-5. **Configure enterprise-level** security and workflows
-6. **Troubleshoot common issues**
-7. **Implement best practices** for code review
+5. **Configure Jenkins** for automated verification
+6. **Set up custom review labels** and submission requirements
+7. **Configure enterprise-level** security and workflows
+8. **Troubleshoot common issues**
+9. **Implement best practices** for code review
 
 ## Prerequisites Check
 
