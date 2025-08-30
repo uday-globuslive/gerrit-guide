@@ -1,0 +1,68 @@
+version: '3'
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:latest
+    ports:
+      - "8080:8080"
+      - "29418:29418"
+    volumes:
+      - gerrit_data:/var/gerrit
+    environment:
+      - CANONICAL_WEB_URL=http://10.11.53.35:8080
+    entrypoint: |
+      sh -c '
+        # Initialize if not done before
+        if [ ! -f /var/gerrit/etc/gerrit.config ]; then
+          echo "Initializing Gerrit..."
+          /var/gerrit/bin/gerrit.sh init -d /var/gerrit --batch --install-all-plugins
+        fi
+        
+        # Generate SSH keys if missing
+        if [ ! -f /var/gerrit/etc/ssh_host_rsa_key ]; then
+          echo "Generating SSH host keys..."
+          ssh-keygen -t rsa -b 2048 -f /var/gerrit/etc/ssh_host_rsa_key -N ""
+          ssh-keygen -t ed25519 -f /var/gerrit/etc/ssh_host_ed25519_key -N ""
+          ssh-keygen -t ecdsa -b 256 -f /var/gerrit/etc/ssh_host_ecdsa_key -N ""
+          chmod 600 /var/gerrit/etc/ssh_host_*_key
+          chmod 644 /var/gerrit/etc/ssh_host_*.pub
+        fi
+        
+        # Download GitLab OAuth plugin
+        echo "Setting up GitLab OAuth..."
+        if [ ! -f /var/gerrit/plugins/gerrit-oauth-provider.jar ]; then
+          echo "Downloading OAuth plugin..."
+          mkdir -p /var/gerrit/plugins
+          
+          # Download with proper error handling
+          if curl -L -f -o /var/gerrit/plugins/gerrit-oauth-provider.jar https://github.com/davido/gerrit-oauth-provider/releases/download/v3.8.0/gerrit-oauth-provider.jar; then
+            echo "OAuth plugin downloaded successfully"
+          else
+            echo "OAuth download failed, using development auth"
+            git config -f /var/gerrit/etc/gerrit.config auth.type "DEVELOPMENT_BECOME_ANY_ACCOUNT"
+            /var/gerrit/bin/gerrit.sh run
+            exit 0
+          fi
+        fi
+        
+        # Configure OAuth for GitLab.com
+        echo "Configuring GitLab.com OAuth..."
+        git config -f /var/gerrit/etc/gerrit.config gerrit.canonicalWebUrl "http://10.11.53.35:8080"
+        git config -f /var/gerrit/etc/gerrit.config auth.type "OAUTH"
+        
+        # GitLab OAuth settings
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-id "f795a4f270fc5baccd1a938ccac1ac3f41923b1a42c9cc48ed5a5c0634a39683"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-secret "gloas-d6e4293946290322e85b6624fee134de419f5332e74296b35f7ebc8ed5082891"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.domain "gitlab.com"
+        git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.use-preferred-username "true"
+        
+        echo "========================================"
+        echo "Gerrit with GitLab.com OAuth is starting"
+        echo "Access: http://10.11.53.35:8080"
+        echo "Login: Click Sign In -> Authenticate via GitLab.com"
+        echo "========================================"
+        
+        /var/gerrit/bin/gerrit.sh run
+      '
+
+volumes:
+  gerrit_data:

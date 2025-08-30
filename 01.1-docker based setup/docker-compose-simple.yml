@@ -1,0 +1,42 @@
+version: '3'
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:latest
+    ports:
+      - "8080:8080"
+      - "29418:29418"
+    volumes:
+      - gerrit_data:/var/gerrit
+    environment:
+      - CANONICAL_WEB_URL=http://10.11.53.35:8080
+    entrypoint: |
+      sh -c '
+        # Initialize if not done before
+        if [ ! -f /var/gerrit/etc/gerrit.config ]; then
+          echo "Initializing Gerrit..."
+          /var/gerrit/bin/gerrit.sh init -d /var/gerrit --batch --install-all-plugins
+        fi
+        
+        # Generate SSH keys if missing
+        if [ ! -f /var/gerrit/etc/ssh_host_rsa_key ]; then
+          echo "Generating SSH host keys..."
+          ssh-keygen -t rsa -b 2048 -f /var/gerrit/etc/ssh_host_rsa_key -N ""
+          ssh-keygen -t ed25519 -f /var/gerrit/etc/ssh_host_ed25519_key -N ""
+          ssh-keygen -t ecdsa -b 256 -f /var/gerrit/etc/ssh_host_ecdsa_key -N ""
+          chmod 600 /var/gerrit/etc/ssh_host_*_key
+          chmod 644 /var/gerrit/etc/ssh_host_*.pub
+        fi
+        
+        # Configure basic settings
+        git config -f /var/gerrit/etc/gerrit.config gerrit.canonicalWebUrl "http://10.11.53.35:8080"
+        git config -f /var/gerrit/etc/gerrit.config auth.type "DEVELOPMENT_BECOME_ANY_ACCOUNT"
+        
+        echo "Starting Gerrit with development authentication..."
+        echo "Access: http://10.11.53.35:8080"
+        echo "Click Sign In -> Become -> Enter any username"
+        
+        /var/gerrit/bin/gerrit.sh run
+      '
+
+volumes:
+  gerrit_data:

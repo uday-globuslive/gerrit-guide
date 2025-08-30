@@ -1,0 +1,119 @@
+version: '3'
+services:
+  gerrit:
+    image: gerritcodereview/gerrit:latest
+    ports:
+      - "8080:8080"
+      - "29418:29418"
+    volumes:
+      - gerrit_data:/var/gerrit
+    environment:
+      - CANONICAL_WEB_URL=http://10.11.53.35:8080
+    entrypoint: |
+      sh -c '
+        # Function to download OAuth plugin
+        download_oauth_plugin() {
+          local plugin_path="/var/gerrit/plugins/gerrit-oauth-provider.jar"
+          local plugin_url="https://github.com/davido/gerrit-oauth-provider/releases/download/v3.8.0/gerrit-oauth-provider.jar"
+          
+          echo "Downloading OAuth plugin..."
+          mkdir -p /var/gerrit/plugins
+          
+          # Method 1: Try curl with follow redirects
+          if curl -L -f -o "$plugin_path" "$plugin_url"; then
+            if [ -s "$plugin_path" ]; then
+              echo "✓ OAuth plugin downloaded successfully ($(stat -c%s "$plugin_path") bytes)"
+              return 0
+            fi
+          fi
+          
+          # Method 2: Try wget
+          rm -f "$plugin_path"
+          if wget -O "$plugin_path" "$plugin_url"; then
+            if [ -s "$plugin_path" ]; then
+              echo "✓ OAuth plugin downloaded successfully via wget ($(stat -c%s "$plugin_path") bytes)"
+              return 0
+            fi
+          fi
+          
+          # Method 3: Try alternative URL
+          rm -f "$plugin_path"
+          local alt_url="https://github.com/davido/gerrit-oauth-provider/releases/download/v3.8.0/gerrit-oauth-provider.jar"
+          if curl -L -f -o "$plugin_path" "$alt_url"; then
+            if [ -s "$plugin_path" ]; then
+              echo "✓ OAuth plugin downloaded from alternative URL ($(stat -c%s "$plugin_path") bytes)"
+              return 0
+            fi
+          fi
+          
+          echo "✗ All download methods failed"
+          rm -f "$plugin_path"
+          return 1
+        }
+        
+        # Check if Gerrit is already initialized
+        if [ ! -f /var/gerrit/etc/gerrit.config ]; then
+          echo "=== Initializing Gerrit for the first time ==="
+          /var/gerrit/bin/gerrit.sh init -d /var/gerrit --batch --install-all-plugins
+        else
+          echo "=== Gerrit already initialized ==="
+        fi
+        
+        # Ensure SSH host keys exist (critical for SSH daemon)
+        echo "=== Checking SSH host keys ==="
+        if [ ! -f /var/gerrit/etc/ssh_host_rsa_key ]; then
+          echo "Generating SSH host keys..."
+          ssh-keygen -t rsa -b 2048 -f /var/gerrit/etc/ssh_host_rsa_key -N "" -C "gerrit-host-key"
+          ssh-keygen -t ed25519 -f /var/gerrit/etc/ssh_host_ed25519_key -N "" -C "gerrit-host-key"
+          ssh-keygen -t ecdsa -b 256 -f /var/gerrit/etc/ssh_host_ecdsa_key -N "" -C "gerrit-host-key"
+          chmod 600 /var/gerrit/etc/ssh_host_*_key
+          chmod 644 /var/gerrit/etc/ssh_host_*.pub
+          echo "✓ SSH host keys generated"
+        else
+          echo "✓ SSH host keys already exist"
+        fi
+        
+        # Configure Gerrit basic settings
+        echo "=== Configuring Gerrit ==="
+        git config -f /var/gerrit/etc/gerrit.config gerrit.canonicalWebUrl "http://10.11.53.35:8080"
+        
+        # Try to download OAuth plugin
+        echo "=== Setting up OAuth ==="
+        if [ ! -f /var/gerrit/plugins/gerrit-oauth-provider.jar ] || [ ! -s /var/gerrit/plugins/gerrit-oauth-provider.jar ]; then
+          if download_oauth_plugin; then
+            echo "✓ OAuth plugin ready"
+            git config -f /var/gerrit/etc/gerrit.config auth.type "OAUTH"
+            git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-id "f795a4f270fc5baccd1a938ccac1ac3f41923b1a42c9cc48ed5a5c0634a39683"
+            git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-secret "gloas-d6e4293946290322e85b6624fee134de419f5332e74296b35f7ebc8ed5082891"
+            git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.domain "gitlab.com"
+            git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.use-preferred-username "true"
+            echo "✓ OAuth configured for GitLab.com"
+          else
+            echo "⚠ OAuth plugin download failed, falling back to development auth"
+            git config -f /var/gerrit/etc/gerrit.config auth.type "DEVELOPMENT_BECOME_ANY_ACCOUNT"
+            echo "✓ Development authentication enabled"
+          fi
+        else
+          echo "✓ OAuth plugin already exists"
+          git config -f /var/gerrit/etc/gerrit.config auth.type "OAUTH"
+          git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-id "f795a4f270fc5baccd1a938ccac1ac3f41923b1a42c9cc48ed5a5c0634a39683"
+          git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.client-secret "gloas-d6e4293946290322e85b6624fee134de419f5332e74296b35f7ebc8ed5082891"
+          git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.domain "gitlab.com"
+          git config -f /var/gerrit/etc/gerrit.config plugin.gerrit-oauth-provider-gitlab-oauth.use-preferred-username "true"
+          echo "✓ OAuth reconfigured"
+        fi
+        
+        # Show configuration summary
+        echo "=== Configuration Summary ==="
+        echo "Canonical URL: $(git config -f /var/gerrit/etc/gerrit.config gerrit.canonicalWebUrl)"
+        echo "Auth Type: $(git config -f /var/gerrit/etc/gerrit.config auth.type)"
+        echo "SSH Keys: $(ls -la /var/gerrit/etc/ssh_host_*_key 2>/dev/null | wc -l) keys"
+        echo "Plugins: $(ls -la /var/gerrit/plugins/*.jar 2>/dev/null | wc -l) plugins"
+        
+        # Start Gerrit
+        echo "=== Starting Gerrit ==="
+        /var/gerrit/bin/gerrit.sh run
+      '
+
+volumes:
+  gerrit_data:
